@@ -1,0 +1,68 @@
+# ======================
+# Python
+# ======================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyc
+*.pyo
+*.pyd
+*.Python
+env/
+venv/
+ENV/
+.venv/
+
+# ======================
+# Data / Large Files
+# ======================
+*.jsonl
+*.json
+*.csv
+*.tsv
+*.parquet
+*.h5
+*.pt
+*.pth
+*.ckpt
+
+# 数据目录
+data/
+datasets/
+dataset/
+output/
+logs/
+tmp/
+temp/
+model/
+bkp/
+train/
+
+# ======================
+# Jupyter / Notebook
+# ======================
+.ipynb_checkpoints/
+*.ipynb
+
+# ======================
+# IDE / Editor
+# ======================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ======================
+# OS
+# ======================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ======================
+# Git / Backup
+# ======================
+*.bak
+*.swp
+*.swo
