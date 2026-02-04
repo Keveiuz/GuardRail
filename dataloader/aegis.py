@@ -34,7 +34,7 @@ class AegisV1Loader(BaseDatasetLoader):
         logger = Logger()
 
         logger.info("Loading Aegis V1 dataset")
-        ds = load_dataset("/Users/jason/Documents/GuardRail/datasets/aegis_v1", split="train")
+        ds = load_dataset("/data1/zez/OpenSafeGuard/datasets/aegis-v1", split="train")
         # ds = load_dataset("nvidia/Aegis-AI-Content-Safety-Dataset-1.0", split="train")
         logger.info(f"Loaded {len(ds)} examples")
 
@@ -45,9 +45,6 @@ class AegisV1Loader(BaseDatasetLoader):
             counter = Counter(labels)
             most_common = counter.most_common()
             top_label, top_count = most_common[0]
-            # 如果第二名存在且与第一名一样多 → 并列 → 返回 None
-            if len(most_common) > 1 and most_common[1][1] == top_count:
-                return None
 
             return top_label
 
@@ -55,16 +52,16 @@ class AegisV1Loader(BaseDatasetLoader):
         result = []
         for item in tqdm(ds, desc="Processing Aegis V1 dataset"):
             
-            if item["text_type"] == "user_message":
+            # if item["text_type"] == "user_message":
+            if item["text_type"] is not None:
                 
-                labels = [ ]
-                for label in [item["labels_0"], item["labels_1"], item["labels_2"], item["labels_3"], item["labels_4"]]:
-                    if label is not None:
-                        labels.append(label)
+                labels = [item.get(f"labels_{i}") for i in range(5) if item.get(f"labels_{i}") is not None]
             
                 category = majority_vote(labels=labels)
 
-                if not item['labels_0'] == 'Safe' and not item['labels_1'] == 'Safe' and not item['labels_2'] == 'Safe':
+                is_harmful = all(label != "Safe" for label in labels)
+
+                if is_harmful:
                     prompt_harm_label = 1
                 else:
                     prompt_harm_label = 0
@@ -76,7 +73,10 @@ class AegisV1Loader(BaseDatasetLoader):
                     response_harm_label=None,
                     response_refusal_label=None,
                     category=category,
-                    extra=None
+                    extra={
+                        "text_type": item.get("text_type"),
+                        "labels": [item.get(f"labels_{i}") for i in range(5)]
+                    }
                 ))
 
         return result
