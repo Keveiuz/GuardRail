@@ -8,8 +8,6 @@ logger = Logger()
 import os
 os.environ["TOKENIZERS_PARALLELISM"]="false"
 
-from tqdm import tqdm
-
 TOPIC_GENERATIONG_PROMPT = """Give me a numbered list of 20 completely random topics. Avoid any tasks that would be related to climate change, green tech, renewable energy, DEI (diversity, equity, inclusion), sex and/or gender, religion, politics, social issues, race, ethnicity, artificial intelligence, baking/cooking, urban development, or any topic that you would likely not respond to, or any task which a language model would not be able to respond to, e.g. tasks about emotions, feelings, physical senses, etc."""
 
 INSTRUCTION_GENERATION_PROMPT = """I would like you to help me create a list of diverse tasks.
@@ -30,13 +28,12 @@ Be sure to include "TSK", untranslated, as a prefix as described in response for
 DEFAULT_CFG = {
     "model": "qwen2.5-72b-instruct",
     "openai_api_key": None,
-    "embedding_model": "/workspace/mnt/lxb_work/zez_work/GuardRail/model/gte-small",
-    # "embedding_model": "thenlper/gte-small",
+    "embedding_model": "thenlper/gte-small",
     "embedding_device": "cpu",
-    "min_docsearch_score": 0.1,
+    "min_docsearch_score": 0.07,
     "api_params": {"temperature": 0.7, "top_p": 0.9},
-    "default_count": 40000,
-    "default_batch_size": 5,
+    "default_count": 4,
+    "default_batch_size": 2,
     "language": "English",
 }
 
@@ -49,7 +46,7 @@ class Deduper:
         self.th = threshold
 
     def embed(self, text):
-        vec = self.model.encode([text], normalize_embeddings=True, show_progress_bar=False)
+        vec = self.model.encode([text], normalize_embeddings=True)
         return np.array(vec, dtype="float32")
 
     def is_dup(self, text):
@@ -63,10 +60,9 @@ class Deduper:
 
 # --- 初始化去重索引（读历史文件） ---
 def init_index(deduper, seed_queries):
-    logger.info("Initializing synthesizer deduper...")
-    for q in tqdm(seed_queries, desc="Indexing seed queries"):
+    for q in seed_queries:
         deduper.add(q)
-    print(f"Initialization finished, {len(seed_queries)} seed queries indexed.")
+    print(f"索引初始化完成，seed 数量 {len(seed_queries)}")
 
 # --- 单 instructor 生成 ---
 def run_instructor(topic, deduper: Deduper, seed_queries, engine: BaseGenerator):
@@ -78,15 +74,14 @@ def run_instructor(topic, deduper: Deduper, seed_queries, engine: BaseGenerator)
     prompt_tpl = INSTRUCTION_GENERATION_PROMPT
     
     total = 0
-    loop = 0
     synth = []
     import random
     while total < count:
-        loop += 1
-        logger.info(f"category: {topic}, loop: {loop}, total: {total}, count: {count}, bs: {bs}")
+        logger.info(f"total: {total}, count: {count}, bs: {bs}")
         
         prompt = []
-        for i in range(int((count - total) / bs) + max(int(int((count - total) / bs) * 0.1),50)):
+        for i in range(int((count - total) / bs) + 1):
+            logger.info(f"category: {topic}, loop: {i} round, total: {total}, count: {count}")
             if total >= count:
                     break
             
@@ -101,18 +96,13 @@ def run_instructor(topic, deduper: Deduper, seed_queries, engine: BaseGenerator)
 
         synth_raw = engine.generate(prompt)
         # logger.debug(f"synth_raw: {synth_raw}")
-        logger.info(f"category: {topic}, total: {total}, count: {count}")
-        for synth_item in tqdm(synth_raw, desc=f"Deduplicating", leave=False):
-            
+        for synth_item in synth_raw:
             text = synth_item[0]["text"]
             for line in text.splitlines():
                 line = line.strip()
                 if not line.startswith("TSK"):
                     continue
                 instr = line.split(".", 1)[-1].strip()
-                if instr.startswith("[task"):
-                    # 找到第一个 ] 的位置，索引 +1 表示从 ] 之后开始切
-                    instr = instr[instr.find("]")+1:].strip()
                 if deduper.is_dup(instr):
                     continue
                 deduper.add(instr)
@@ -120,11 +110,7 @@ def run_instructor(topic, deduper: Deduper, seed_queries, engine: BaseGenerator)
                 total += 1
                 if total >= count:
                     break
-        logger.info(f"category: {topic}, total: {total}, count: {count}")
-        # logger.debug(f"synth: {synth}")
-    if total > count:
-        import random
-        return random.sample(synth, count)
+        logger.info(f"synth: {synth}")
     return synth
 
 class SelfInstruct():
